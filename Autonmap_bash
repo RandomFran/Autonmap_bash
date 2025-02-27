@@ -1,26 +1,21 @@
 #!/bin/bash
 
-# Función para verificar si una IP es válida
-validar_ip() {
-    local ip=$1
-    if [[ $ip =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        return 0
-    else
-        return 1
-    fi
+# Función para mostrar el uso del script
+mostrar_uso() {
+    echo "Uso: $0 <IP>"
+    exit 1
 }
 
 # Verificar si se proporcionó una IP como argumento
 if [ -z "$1" ]; then
-    echo "Uso: $0 <IP>"
-    exit 1
+    mostrar_uso
 fi
 
 # Asignar la IP proporcionada a una variable
 IP=$1
 
 # Verificar si la IP es válida
-if ! validar_ip "$IP"; then
+if ! [[ $IP =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     echo "Error: La IP proporcionada no es válida."
     exit 1
 fi
@@ -40,9 +35,36 @@ fi
 # Crear un nombre base para los archivos de salida
 OUTPUT_BASE="escaneo_$IP"
 
-# Ejecutar nmap con las opciones -sC, -sV, -p-, sin mostrar la salida en la terminal
-echo "Escaneando la IP $IP con nmap..."
-nmap -sC -sV -p- -oA "$OUTPUT_BASE" "$IP" > /dev/null  # Redirigir la salida estándar a /dev/null
+# Función para mostrar una barra de progreso cíclica
+mostrar_progreso() {
+    local pid=$1
+    local contador=0
+    echo -n "Escaneando... ["
+    while kill -0 "$pid" 2> /dev/null; do
+        if [ "$contador" -lt 20 ]; then
+            echo -n "#"
+            contador=$((contador + 1))
+        else
+            # Reiniciar la barra eliminando los # anteriores
+            echo -ne "]\rEscaneando... ["
+            contador=0
+        fi
+        sleep 1
+    done
+    # Completar la barra al 100%
+    echo -ne "####################] 100%\n"
+}
+
+# Ejecutar nmap en segundo plano
+echo "Iniciando escaneo de la IP $IP con nmap..."
+nmap -sC -sV -p- -oA "$OUTPUT_BASE" "$IP" > /dev/null 2>&1 &
+nmap_pid=$!
+
+# Mostrar la barra de progreso
+mostrar_progreso "$nmap_pid"
+
+# Esperar a que nmap termine
+wait "$nmap_pid"
 
 if [ $? -eq 0 ]; then
     echo "Escaneo completado. Resultados guardados en:"
